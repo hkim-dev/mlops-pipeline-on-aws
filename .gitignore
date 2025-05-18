@@ -1,3 +1,13 @@
-*.csv
-*.pkl
 .vscode
+
+# custom
+*.csv
+models/
+*.zip
+package/
+
+# terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate*
+terraform.tfvars

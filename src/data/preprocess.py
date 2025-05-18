@@ -4,6 +4,14 @@ import pandas as pd
 import nltk
 from nltk.corpus import stopwords
 from tqdm import tqdm
+import logging
+import boto3
+from botocore.exceptions import ClientError
+import os
+
+# S3 configuration
+S3_BUCKET = os.getenv("S3_BUCKET")
+S3_KEY = os.getenv("S3_KEY")
 
 nltk.download("stopwords")
 stop_words = set(stopwords.words("english"))
@@ -29,8 +37,20 @@ def preprocess_ag_news():
         })
 
     df = pd.DataFrame(processed)
-    df.to_csv("preprocessed_news.csv", index=False)
-    print("Saved to preprocessed_news.csv")
+
+    file_name = "preprocessed_news.csv"
+    # save locally
+    df.to_csv(file_name, index=False)
+    print(f"Saved to {file_name}")
+
+    # upload the CSV to S3
+    s3 = boto3.client("s3")
+    try:
+        s3.upload_file(file_name, S3_BUCKET, S3_KEY)
+        print(f"✅ Uploaded {file_name} to s3://{S3_BUCKET}/{S3_KEY}")
+    except ClientError as e:
+        logging.error("❌ Failed to upload to S3: %s", e)
+        raise e
 
 if __name__ == "__main__":
     preprocess_ag_news()
