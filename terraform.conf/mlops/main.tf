@@ -1,3 +1,84 @@
+resource "aws_ecs_task_definition" "mlops_preprocess_task" {
+  family                   = "mlops-preprocess"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = var.ecs_task_execution_role
+  task_role_arn            = var.ecs_task_execution_role
+
+  container_definitions = jsonencode([
+    {
+      name      = "mlops-preprocess"
+      image     = var.preprocess_image_url
+      essential = true
+      environment = [
+        {
+          name  = "S3_BUCKET"
+          value = var.s3_bucket
+        },
+        {
+          name  = "S3_KEY"
+          value = var.s3_data_key
+        }
+      ],
+      logConfiguration = {
+        logDriver = "awslogs",
+        options = {
+          awslogs-group         = "/ecs/mlops",
+          awslogs-region        = "ap-northeast-2",
+          awslogs-stream-prefix = "preprocess"
+        }
+      }
+    }
+  ])
+}
+
+resource "aws_ecs_task_definition" "mlops_train_task" {
+  family                   = "mlops-train"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = var.ecs_task_execution_role
+  task_role_arn            = var.ecs_task_execution_role
+
+  container_definitions = jsonencode([
+    {
+      name      = "mlops-train",
+      image     = var.train_image_url,
+      essential = true,
+      environment = [
+        {
+          name  = "S3_BUCKET",
+          value = var.s3_bucket
+        },
+        {
+          name  = "S3_DATA_KEY",
+          value = var.s3_data_key
+        },
+        {
+          name  = "S3_MODEL_KEY",
+          value = var.s3_model_key
+        },
+        {
+          name  = "S3_VECTORIZER_KEY",
+          value = var.s3_vectorizer_key
+        }
+      ],
+      logConfiguration = {
+        logDriver = "awslogs",
+        options = {
+          awslogs-group         = "/ecs/mlops",
+          awslogs-region        = "ap-northeast-2",
+          awslogs-stream-prefix = "train"
+        }
+      }
+    }
+  ])
+}
+
+
 resource "aws_sfn_state_machine" "mlops_pipeline" {
   name     = "mlops-pipeline"
   role_arn = aws_iam_role.step_function_execution_role.arn
@@ -11,7 +92,7 @@ resource "aws_sfn_state_machine" "mlops_pipeline" {
         Resource = "arn:aws:states:::ecs:runTask.sync",
         Parameters = {
           LaunchType = "FARGATE",
-          Cluster    = aws_ecs_cluster.mlops_cluster.arn,
+          Cluster    = var.ecs_cluster_arn,
           TaskDefinition = aws_ecs_task_definition.mlops_preprocess_task.arn,
           NetworkConfiguration = {
             AwsvpcConfiguration = {
@@ -39,7 +120,7 @@ resource "aws_sfn_state_machine" "mlops_pipeline" {
         Resource = "arn:aws:states:::ecs:runTask.sync",
         Parameters = {
           LaunchType = "FARGATE",
-          Cluster    = aws_ecs_cluster.mlops_cluster.arn,
+          Cluster    = var.ecs_cluster_arn,
           TaskDefinition = aws_ecs_task_definition.mlops_train_task.arn,
           NetworkConfiguration = {
             AwsvpcConfiguration = {
